@@ -5,8 +5,9 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME              => 'Catalyst::View::SVGTTGraph',
     VERSION_FROM      => 'lib/Catalyst/View/SVGTTGraph.pm', # finds $VERSION
-    PREREQ_PM         => {}, # e.g., Module::Name => 1.1
+    PREREQ_PM         => {'Catalyst' => '5.57',
+			  'SVG::TT::Graph' => '0.08'},
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Catalyst/View/SVGTTGraph.pm', # retrieve abstract from module
-       AUTHOR         => 'A. U. Thor <takayama@localdomain>') : ()),
+       AUTHOR         => 'Shota Takayama <shot[atmark]bindstorm.jp>') : ()),
 );

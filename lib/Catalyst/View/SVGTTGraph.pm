@@ -7,13 +7,13 @@ use NEXT;
 
 my($Revision) = '$Id: SVGTTGraph.pm,v 1.1.1.1 2006/02/11 17:54:15 takayama Exp $';
 
-our $VERSION = '0.01';
+our $VERSION = '0.011';
 
 use Data::Dumper;
 
 =head1 NAME
 
-Catalyst::View::SVGTTGraph - SVG Graph View Component
+Catalyst::View::SVGTTGraph - SVG Graph View Component for Catalyst
 
 =head1 SYNOPSIS
 
