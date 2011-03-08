@@ -3,11 +3,12 @@ package Catalyst::View::SVGTTGraph;
 use strict;
 use warnings;
 use base qw(Catalyst::View);
-use NEXT;
+use UNIVERSAL::require;
 
-my($Revision) = '$Id: SVGTTGraph.pm,v 1.1.1.1 2006/02/11 17:54:15 takayama Exp $';
 
-our $VERSION = '0.011';
+my($Revision) = '$Id: SVGTTGraph.pm,v 1.2 2006/02/18 03:03:28 takayama Exp $'; #'
+
+our $VERSION = '0.02';
 
 use Data::Dumper;
 
@@ -16,6 +17,12 @@ use Data::Dumper;
 Catalyst::View::SVGTTGraph - SVG Graph View Component for Catalyst
 
 =head1 SYNOPSIS
+
+in your config.
+
+  $c->config->{'View::SVGTTGraph'}->{image_format} = 'png';
+
+Supported formats are 'Image::LibRSVG->getSupportedFormats()' call to see.
 
 in your View.
 
@@ -64,18 +71,47 @@ $c->svgttg uses $c->stash->{'Catalyst::View::SVGTTGraph'}.
 
 sub new {
     my $class = shift;
-    my $c = shift;
-    my $self = $class->NEXT::new($c, @_);
+    my $c     = shift;
+    my $self;
+    if( $Catalyst::VERSION >= 5.8 ) {
+        MRO::Compat->use or die "can not use MRO::Compat : $@\n";
+        $self = $class->maybe::next::method( $c, @_ );
+    }
+    else {
+        NEXT->use or die "can not use NEXT : $@\n";
+        $self = $class->NEXT::new( $c, @_ );
+    }
+    if( exists $c->config->{'View::SVGTTGraph'}->{image_format}
+        and $c->config->{'View::SVGTTGraph'}->{image_format} ne 'svg' ) {
+        Image::LibRSVG->use or die "can not use Image::LibRSVG : $@\n";
+        die join( "\n",
+                  '',
+                  "this format is not support on this system : ".$c->config->{'View::SVGTTGraph'}->{image_format},
+                  "please check support formats. call Image::LibRSVG->getSupportedFormats()",
+                  '' )
+            unless( Image::LibRSVG->isFormatSupported( $c->config->{'View::SVGTTGraph'}->{image_format} ) );
+    }
     {
-	no strict 'refs';
-	my $accessor = sub {
-	    my $c = shift;
-	    $c->stash->{'Catalyst::View::SVGTTGraph'} = Catalyst::View::SVGTTGraphObj->new()
-		unless($c->stash->{'Catalyst::View::SVGTTGraph'});
-	    return $c->stash->{'Catalyst::View::SVGTTGraph'};
-	};
-	*{"${c}::svgttg"} = $accessor;
-	*{"${c}::_svgttg_accessor"} = $accessor;
+        no strict 'refs';
+        my $accessor = sub {
+            my $c = shift;
+            unless( $c->stash->{'Catalyst::View::SVGTTGraph'} ) {
+                my $obj = Catalyst::View::SVGTTGraphObj->new();
+                # config
+                if( exists $c->config->{'View::SVGTTGraph'} and ref( $c->config->{'View::SVGTTGraph'} ) eq 'HASH' ) {
+                    $obj->config( $c->config->{'View::SVGTTGraph'} );
+                    $obj->_rsvg( Image::LibRSVG->new )
+                        if( exists $obj->config->{image_format} );
+                }
+                else {
+                    $obj->config( {} );
+                }
+                $c->stash->{'Catalyst::View::SVGTTGraph'} = $obj;
+                return $c->stash->{'Catalyst::View::SVGTTGraph'};
+            }
+        };
+        *{"${c}::svgttg"} = $accessor;
+        *{"${c}::_svgttg_accessor"} = $accessor;
     }
     return $self
 }
@@ -86,15 +122,49 @@ create SVG Graph
 
 =cut
 
+    my $content_types = {
+        'png'      => 'image/png',
+        'tga'      => 'image/targa',
+        'ico'      => 'image/vnd.microsoft.icon',
+        'xpm'      => 'image/x-xpixmap',
+        'qtif'     => 'image/x-quicktime',
+        'xbm'      => 'image/x-xbitmap',
+        'icns'     => '',
+        'wbmp'     => 'image/vnd.wap.wbmp',
+        'bmp'      => 'image/x-bmp',
+        'wmf'      => 'application/x-msmetafile',
+        'tiff'     => 'image/tiff',
+        'pcx'      => 'image/x-pcx',
+        'ras'      => 'image/x-cmu-raster',
+        'gif'      => 'image/gif',
+        'ani'      => 'application/octet-stream',
+        'jpeg'     => 'image/jpeg',
+        'pnm'      => 'image/x-portable-anymap',
+        'jpeg2000' => 'image/jpeg',
+        'svg'      => 'image/svg+xml'
+    };
+
 sub process {
     my $self = shift;
     my $c = shift;
     
     die "Catalyst::View::SVGTTGraph : graph object is undefined !"
-	unless($c->svgttg->graph_obj);
-#    $c->log->debug(Dumper($c->view_svggraph));
-    $c->res->header('Content-Type' => 'image/svg+xml');
-    $c->res->body($c->svgttg->burn);
+        unless( $c->svgttg->graph_obj );
+    if( exists $c->svgttg->config->{image_format}
+        and $c->config->{'View::SVGTTGraph'}->{image_format} ne 'svg'
+        and Image::LibRSVG->isFormatSupported( $c->svgttg->config->{image_format} ) ) {
+        $c->svgttg->graph_obj->compress( 0 );
+        $c->svgttg->_rsvg->loadImageFromString( $c->svgttg->burn );
+
+        
+        $c->res->header( 'Content-Type' => $content_types->{ $c->svgttg->config->{image_format} } );
+        $c->res->body( $c->svgttg->_rsvg->getImageBitmap( $c->svgttg->config->{image_format} ) );
+    }
+    else {
+        $c->res->header('Content-Type' => 'image/svg+xml');
+        $c->res->header('Content-Encoding' => 'gzip') if( $c->svgttg->graph_obj->compress );
+        $c->res->body($c->svgttg->burn);
+    }
     return 1;
 }
 
@@ -105,13 +175,13 @@ package Catalyst::View::SVGTTGraphObj;
 
 use strict;
 use base 'Class::Accessor::Fast';
-
+use UNIVERSAL::require;
 
 sub new {
     my $pkg = shift;
     my $c = shift;
     my $this = bless({}, $pkg);
-    $this->mk_accessors(qw(graph_obj _c));
+    $this->mk_accessors(qw(graph_obj _c config _rsvg));
     $this->graph_obj(undef);
     $this->_c($c);
     return $this;
@@ -136,9 +206,7 @@ sub create {
     my $opt = shift;
 
     my $graph_pkg = "SVG::TT::Graph::$type";
-    eval("use $graph_pkg;");
-    die "Catalyst::View::SVGTTGraph : use error !\n$@"
-	if($@);
+    $graph_pkg->use or die "Catalyst::View::SVGTTGraph : use error !\n$@";
     $this->graph_obj($graph_pkg->new($opt));
 }
 
